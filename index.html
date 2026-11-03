@@ -9,12 +9,369 @@
     <meta property="og:description" content="황량한 아포칼립스 사막 고속도로에서 펼쳐지는 2D 탑다운 자동차 뱀파이어 서바이벌 아케이드 게임" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN (GitHub Pages / No-build compatible) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+              display: ['"Chakra Petch"', 'sans-serif'],
+              mono: ['monospace', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      body {
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+      }
+      .font-display {
+        font-family: 'Chakra Petch', sans-serif;
+      }
+    </style>
   </head>
-  <body class="bg-stone-950 text-stone-100 overflow-hidden select-none touch-none">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body class="bg-stone-950 text-stone-100 overflow-hidden select-none touch-none m-0 p-0 w-screen h-screen">
+
+    <!-- 1. Game Canvas (Full-screen WebGL/Canvas viewport) -->
+    <canvas id="game-canvas" class="absolute inset-0 block w-full h-full cursor-crosshair z-0"></canvas>
+
+    <!-- 2. Top In-Game HUD -->
+    <div id="hud-container" class="hidden absolute inset-x-0 top-0 pointer-events-none z-10 p-3 sm:p-5 flex flex-col gap-2.5">
+      <!-- EXP Bar full width -->
+      <div class="w-full bg-stone-900/80 backdrop-blur-md rounded-full border border-stone-700/60 p-1 shadow-lg pointer-events-auto">
+        <div class="flex items-center justify-between px-3 py-0.5 text-xs font-display">
+          <span id="exp-level-text" class="text-amber-400 font-bold tracking-wider">LV. 1</span>
+          <span id="exp-ratio-text" class="text-stone-300 tabular-nums font-mono">0 / 30 EXP (0%)</span>
+        </div>
+        <div class="w-full bg-stone-950/80 h-2.5 rounded-full overflow-hidden border border-stone-800">
+          <div id="exp-bar-fill" class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 h-full transition-all duration-150 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.5)]" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="flex items-start justify-between gap-3">
+        <!-- Left: Player Vital Meters with Vehicle Evolution Stage -->
+        <div class="flex flex-col gap-2 min-w-[210px] sm:min-w-[250px] bg-stone-900/85 backdrop-blur-md p-3 rounded-xl border border-stone-700/60 shadow-xl pointer-events-auto">
+          <!-- HP Bar -->
+          <div>
+            <div class="flex items-center justify-between text-xs font-semibold mb-1">
+              <span class="flex items-center gap-1.5 text-rose-400 font-display">
+                <svg class="w-3.5 h-3.5 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span id="vehicle-name-badge" class="text-amber-300 font-bold">[오토바이]</span> 내구도
+              </span>
+              <span id="hp-text" class="text-stone-200 tabular-nums font-mono text-[11px]">75 / 75</span>
+            </div>
+            <div class="w-full bg-stone-950 h-3 rounded-md overflow-hidden border border-stone-800">
+              <div id="hp-bar-fill" class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-150 rounded-sm" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <!-- Nitro Boost Fuel Bar -->
+          <div>
+            <div class="flex items-center justify-between text-xs font-semibold mb-1">
+              <span class="flex items-center gap-1.5 text-cyan-400 font-display">
+                <svg class="w-3.5 h-3.5 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                니트로 부스터 (SPACE)
+              </span>
+              <span id="boost-status-text" class="text-stone-300 tabular-nums font-mono text-[11px]">100%</span>
+            </div>
+            <div class="w-full bg-stone-950 h-2.5 rounded-md overflow-hidden border border-stone-800">
+              <div id="boost-bar-fill" class="h-full bg-gradient-to-r from-cyan-600 via-cyan-400 to-sky-300 transition-all duration-100 rounded-sm shadow-[0_0_8px_rgba(6,182,212,0.6)]" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: Survival Time & Kills -->
+        <div class="flex items-center gap-3 bg-stone-900/85 backdrop-blur-md px-4 py-2 rounded-xl border border-stone-700/60 shadow-xl pointer-events-auto">
+          <div class="text-center px-2">
+            <div class="text-[10px] text-stone-400 font-display uppercase tracking-wider">생존 시간</div>
+            <div id="timer-text" class="text-lg sm:text-xl font-bold font-mono text-amber-400 tabular-nums">00:00</div>
+          </div>
+          <div class="w-px h-8 bg-stone-700/60"></div>
+          <div class="text-center px-2 flex items-center gap-2">
+            <svg class="w-4 h-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="M12.5 17l-.5-1-.5 1"/><path d="M16 20a3 3 0 0 0 3-3V9a7 7 0 0 0-14 0v8a3 3 0 0 0 3 3z"/></svg>
+            <div>
+              <div class="text-[10px] text-stone-400 font-display uppercase tracking-wider">처치 수</div>
+              <div id="kills-text" class="text-base sm:text-lg font-bold font-mono text-stone-100 tabular-nums">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Weapons List & Utilities -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+          <div class="hidden md:flex items-center gap-1.5 bg-stone-900/85 backdrop-blur-md p-1.5 rounded-xl border border-stone-700/60 shadow-xl">
+            <div id="weapon-turret-tag" class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40" title="전방 기관총">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+              <span class="level-span">Lv.1</span>
+            </div>
+            <div id="weapon-saw-tag" class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono opacity-40 text-stone-500" title="회전 범퍼 톱날">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="level-span">Lv.0</span>
+            </div>
+            <div id="weapon-oil-tag" class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono opacity-40 text-stone-500" title="오일 슬릭 &amp; 화염">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+              <span class="level-span">Lv.0</span>
+            </div>
+            <div id="weapon-missile-tag" class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono opacity-40 text-stone-500" title="오토 타겟 미사일">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+              <span class="level-span">Lv.0</span>
+            </div>
+          </div>
+
+          <!-- Audio Toggle -->
+          <button id="mute-btn" class="p-2.5 bg-stone-900/85 hover:bg-stone-800 text-stone-300 hover:text-white rounded-xl border border-stone-700/60 shadow-xl transition-colors cursor-pointer" title="음소거 토글 (M)">
+            <span id="mute-icon">
+              <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </span>
+          </button>
+
+          <!-- Pause Toggle -->
+          <button id="pause-btn" class="p-2.5 bg-stone-900/85 hover:bg-stone-800 text-stone-300 hover:text-white rounded-xl border border-stone-700/60 shadow-xl transition-colors cursor-pointer" title="일시정지 (P / ESC)">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Title Screen Modal -->
+    <div id="title-modal" class="absolute inset-0 bg-stone-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="max-w-md w-full bg-stone-900 border border-stone-700/80 rounded-2xl p-6 sm:p-8 shadow-2xl text-center flex flex-col items-center">
+        <!-- Logo Badge -->
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-600 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-900/40 mb-4 border border-rose-400/30">
+          <svg class="w-9 h-9 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+        </div>
+
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight font-display text-white mb-1">
+          DRIVE &amp; SURVIVAL
+        </h1>
+        <p class="text-amber-400 text-sm font-semibold tracking-wide font-display mb-3">
+          드라이브 서바이벌 : 아포칼립스 하이웨이
+        </p>
+
+        <p class="text-stone-300 text-xs sm:text-sm leading-relaxed mb-3">
+          황량한 사막 도로 위에서 밀려오는 폭주족 차량들을 격파하고 생존하세요.
+          차량 부착 무기는 <span class="text-amber-300 font-semibold">자동 공격</span>되며,
+          부스터를 사용해 적들을 들이받아 분쇄할 수 있습니다!
+        </p>
+
+        <!-- Victory Target Banner -->
+        <div class="w-full bg-amber-500/15 border border-amber-500/40 rounded-xl p-2.5 text-center mb-3">
+          <span class="flex items-center justify-center gap-1.5 text-amber-300 font-display font-bold text-xs">
+            <svg class="w-4 h-4 text-amber-400 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            승리 조건: 2분에 출현하는 대형 몬스터 트럭(보스) 처치!
+          </span>
+        </div>
+
+        <!-- Vehicle Evolution Table -->
+        <div class="w-full bg-stone-950/80 rounded-xl p-3 border border-stone-800 text-left text-xs mb-3">
+          <div class="font-semibold text-amber-400 font-display mb-1 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+            레벨별 탈것(차량) 순차 진화
+          </div>
+          <div class="text-[11px] text-stone-300 leading-snug space-y-0.5 font-mono">
+            <div><span class="text-rose-400 font-bold">Lv.1</span> 오토바이 (날렵하나 체력 낮음)</div>
+            <div><span class="text-lime-400 font-bold">Lv.2</span> 경차 (균형 잡힌 소형 차량)</div>
+            <div><span class="text-blue-400 font-bold">Lv.3</span> 승용차 (안정적 속도와 방어력)</div>
+            <div><span class="text-emerald-400 font-bold">Lv.4</span> SUV (묵직한 체력, 밀쳐내기 강화)</div>
+            <div><span class="text-amber-400 font-bold">Lv.5+</span> 스포츠카 (최고 속도, 무기 화력 극대화)</div>
+          </div>
+        </div>
+
+        <!-- Controls Overview -->
+        <div class="w-full bg-stone-950/70 rounded-xl p-3 border border-stone-800 text-left text-xs mb-5 space-y-1.5">
+          <div class="flex items-center justify-between text-stone-300">
+            <span class="font-semibold text-stone-400">가속 / 후진 / 조향</span>
+            <span class="font-mono bg-stone-800 px-2 py-0.5 rounded text-amber-300">W A S D / 방향키</span>
+          </div>
+          <div class="flex items-center justify-between text-stone-300">
+            <span class="font-semibold text-stone-400">니트로 부스터 돌진</span>
+            <span class="font-mono bg-stone-800 px-2 py-0.5 rounded text-cyan-300">SPACE / SHIFT</span>
+          </div>
+          <div class="flex items-center justify-between text-stone-300">
+            <span class="font-semibold text-stone-400">무기 공격 방식</span>
+            <span class="text-emerald-400 font-semibold">자동 사격 &amp; 자동 조준</span>
+          </div>
+          <div class="flex items-center justify-between text-stone-300">
+            <span class="font-semibold text-stone-400">일시정지 / 사운드</span>
+            <span class="font-mono bg-stone-800 px-2 py-0.5 rounded text-stone-300">ESC / M 키</span>
+          </div>
+        </div>
+
+        <!-- Start Button -->
+        <button id="start-btn" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-rose-600 to-amber-600 hover:from-amber-400 hover:to-rose-500 text-white font-bold font-display text-base tracking-wider shadow-lg shadow-rose-900/30 transition-all transform active:scale-95 cursor-pointer flex items-center justify-center gap-2">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          생존 드라이브 시작
+        </button>
+      </div>
+    </div>
+
+    <!-- 4. Level-Up Upgrade Selection Modal -->
+    <div id="levelup-modal" class="hidden absolute inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="max-w-2xl w-full bg-stone-900/95 border border-amber-500/50 rounded-2xl p-6 shadow-2xl">
+        <div class="text-center mb-4">
+          <div class="inline-block px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-bold font-display tracking-widest uppercase mb-1">
+            LEVEL UP!
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold font-display text-white">
+            차량 업그레이드 선택
+          </h2>
+          <p class="text-stone-400 text-xs mt-1">
+            장착할 무기 또는 추가 성능을 선택하세요 (숫자키 1, 2, 3으로 빠른 선택)
+          </p>
+        </div>
+
+        <!-- Vehicle Evolution Banner -->
+        <div id="evolution-banner" class="hidden mb-4 bg-gradient-to-r from-amber-500/20 via-rose-500/15 to-amber-500/20 border border-amber-400/60 rounded-xl p-3 flex items-center gap-3 shadow-lg">
+          <div class="p-2.5 rounded-lg bg-amber-500 text-stone-950 font-display font-extrabold text-xs shrink-0 shadow-md">
+            진화 완료!
+          </div>
+          <div class="text-left flex-1 min-w-0">
+            <div class="text-sm font-bold text-white font-display flex items-center gap-1.5">
+              <span id="evolution-badge" class="text-amber-300">[Lv.2 경차 진화]</span>
+              <span id="evolution-name">경차</span>
+            </div>
+            <div id="evolution-desc" class="text-xs text-stone-300 truncate">
+              균형 잡힌 소형 차량으로 차체 내구도와 충돌 안정성이 상승합니다. (내구도 즉시 회복!)
+            </div>
+          </div>
+        </div>
+
+        <!-- Cards Container (3 Cards generated by JS) -->
+        <div id="upgrade-cards-container" class="grid grid-cols-1 sm:grid-cols-3 gap-3.5"></div>
+      </div>
+    </div>
+
+    <!-- 5. Paused Modal -->
+    <div id="paused-modal" class="hidden absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="max-w-sm w-full bg-stone-900 border border-stone-700 rounded-2xl p-6 text-center shadow-2xl">
+        <h2 class="text-2xl font-bold font-display text-white mb-2">일시 정지</h2>
+        <p class="text-stone-400 text-xs mb-6">게임이 멈춰있습니다. 준비가 되면 재개하세요.</p>
+
+        <div class="space-y-3">
+          <button id="resume-btn" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold font-display text-sm tracking-wider shadow-lg transition-colors cursor-pointer flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            계속하기 (Resume)
+          </button>
+          <button id="restart-from-pause-btn" class="w-full py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-medium text-sm transition-colors cursor-pointer flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            처음부터 다시하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Game Over Modal -->
+    <div id="gameover-modal" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="max-w-md w-full bg-stone-900 border border-rose-600/50 rounded-2xl p-6 sm:p-8 text-center shadow-2xl">
+        <div class="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-rose-950/50">
+          <svg class="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="M12.5 17l-.5-1-.5 1"/><path d="M16 20a3 3 0 0 0 3-3V9a7 7 0 0 0-14 0v8a3 3 0 0 0 3 3z"/></svg>
+        </div>
+
+        <h2 class="text-3xl font-black font-display text-white tracking-wide mb-1">GAME OVER</h2>
+        <p class="text-rose-400 text-xs font-semibold uppercase tracking-wider font-display mb-6">차량이 완전히 파괴되었습니다</p>
+
+        <div class="grid grid-cols-2 gap-3 bg-stone-950/80 p-4 rounded-xl border border-stone-800 mb-6 text-left">
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">버틴 시간</div>
+            <div id="go-time" class="text-xl font-bold font-mono text-amber-400 tabular-nums">00:00</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">적 처치 수</div>
+            <div id="go-kills" class="text-xl font-bold font-mono text-white tabular-nums">0 마리</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">최종 레벨</div>
+            <div id="go-level" class="text-xl font-bold font-mono text-cyan-400 tabular-nums">Lv. 1</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">수집한 부품</div>
+            <div id="go-scrap" class="text-xl font-bold font-mono text-emerald-400 tabular-nums">0 개</div>
+          </div>
+        </div>
+
+        <button id="restart-gameover-btn" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold font-display text-base tracking-wider shadow-lg shadow-rose-950/50 transition-all transform active:scale-95 cursor-pointer flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          다시 도전하기
+        </button>
+      </div>
+    </div>
+
+    <!-- 7. Victory Screen Modal (2분 보스 격파 승리!) -->
+    <div id="victory-modal" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="max-w-md w-full bg-stone-900 border border-amber-500/60 rounded-2xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
+        <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 text-stone-950 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-amber-500/30 border border-yellow-200">
+          <svg class="w-11 h-11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+        </div>
+
+        <div class="inline-block px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold font-display tracking-widest uppercase mb-1">
+          MISSION ACCOMPLISHED!
+        </div>
+
+        <h2 class="text-3xl sm:text-4xl font-black font-display text-white tracking-wide mb-2">VICTORY!</h2>
+        <p class="text-emerald-400 text-xs font-semibold uppercase tracking-wider font-display mb-6">
+          2분 보스 대형 몬스터 트럭 격파 완료 · 사막 고속도로 탈출 성공!
+        </p>
+
+        <div class="grid grid-cols-2 gap-3 bg-stone-950/80 p-4 rounded-xl border border-stone-800 mb-6 text-left">
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">탈출 시간</div>
+            <div id="vic-time" class="text-xl font-bold font-mono text-amber-400 tabular-nums">00:00</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">적 격파 수</div>
+            <div id="vic-kills" class="text-xl font-bold font-mono text-white tabular-nums">0 마리</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">최종 달성 레벨</div>
+            <div id="vic-level" class="text-xl font-bold font-mono text-cyan-400 tabular-nums">Lv. 1</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-stone-500 font-display uppercase tracking-wider">수집 부품</div>
+            <div id="vic-scrap" class="text-xl font-bold font-mono text-emerald-400 tabular-nums">0 개</div>
+          </div>
+        </div>
+
+        <button id="restart-victory-btn" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-bold font-display text-base tracking-wider shadow-lg shadow-amber-500/25 transition-all transform active:scale-95 cursor-pointer flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          새로운 게임 시작하기
+        </button>
+      </div>
+    </div>
+
+    <!-- 8. Mobile Touch Controls (D-pad & Boost Button) -->
+    <div id="mobile-controls" class="hidden sm:hidden absolute inset-x-0 bottom-4 px-6 flex items-end justify-between pointer-events-none z-20">
+      <div class="grid grid-cols-3 gap-2 pointer-events-auto w-36">
+        <div></div>
+        <button id="touch-up" class="h-12 bg-stone-900/80 active:bg-amber-500/40 border border-stone-700 rounded-xl text-stone-200 font-bold flex items-center justify-center text-sm">▲</button>
+        <div></div>
+        <button id="touch-left" class="h-12 bg-stone-900/80 active:bg-amber-500/40 border border-stone-700 rounded-xl text-stone-200 font-bold flex items-center justify-center text-sm">◀</button>
+        <button id="touch-down" class="h-12 bg-stone-900/80 active:bg-amber-500/40 border border-stone-700 rounded-xl text-stone-200 font-bold flex items-center justify-center text-sm">▼</button>
+        <button id="touch-right" class="h-12 bg-stone-900/80 active:bg-amber-500/40 border border-stone-700 rounded-xl text-stone-200 font-bold flex items-center justify-center text-sm">▶</button>
+      </div>
+
+      <button id="mobile-boost-btn" class="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-400 active:scale-95 border-2 border-white/40 shadow-xl flex flex-col items-center justify-center text-white pointer-events-auto">
+        <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span class="text-[10px] font-bold font-display uppercase tracking-wider">부스터</span>
+      </button>
+    </div>
+
+    <!-- Pure Vanilla JS Game Script -->
+    <script src="./script.js"></script>
   </body>
 </html>

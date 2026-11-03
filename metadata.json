@@ -2,5 +2,7 @@
   "name": "Drive & Survival - 드라이브 서바이벌",
   "description": "황량한 아포칼립스 사막 고속도로에서 펼쳐지는 2D 탑다운 자동차 뱀파이어 서바이벌 아케이드 게임",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
